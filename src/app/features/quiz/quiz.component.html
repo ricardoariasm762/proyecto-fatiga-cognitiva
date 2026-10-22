@@ -1,0 +1,144 @@
+<div class="quiz-container">
+  
+  <!-- CASO 1: CUESTIONARIO FINALIZADO -->
+  @if (isQuizFinished()) {
+    <section class="finish-section">
+      <div class="finish-card">
+        <div class="trophy-icon">🏆</div>
+        <h1 class="finish-title">¡Evaluación Completada con Éxito!</h1>
+        <p class="finish-subtitle">
+          Has respondido todos los ejercicios pedagógicos. La telemetría capturada en tiempo real ya se encuentra procesada por el motor de inferencia ONNX.
+        </p>
+
+        <div class="metrics-row">
+          <div class="m-card">
+            <span class="m-label">Aciertos Totales</span>
+            <span class="m-val text-accent">{{ correctCount() }} / {{ totalQuestions() }}</span>
+            <span class="m-sub">Precisión: {{ accuracyPercent() }}%</span>
+          </div>
+
+          <div class="m-card">
+            <span class="m-label">Sesión Evaluada</span>
+            <span class="m-val text-cyan">{{ telemetryService.sessionHistory().length }}</span>
+            <span class="m-sub">Registros de telemetría</span>
+          </div>
+        </div>
+
+        <div class="finish-actions">
+          <button type="button" class="btn btn-primary" (click)="goToDashboard()">
+            📊 Ver Análisis y Gráficas en Dashboard
+          </button>
+
+          <button type="button" class="btn btn-secondary" (click)="restartQuiz()">
+            🔄 Realizar Nueva Prueba
+          </button>
+        </div>
+      </div>
+    </section>
+  }
+
+  <!-- CASO 2: EJERCICIO ACTIVO -->
+  @else {
+    <div class="quiz-active-layout">
+      
+      <!-- Barra de progreso e indicadores de telemetría pasiva -->
+      <div class="quiz-top-bar">
+        <app-progress-bar 
+          [current]="currentIndex() + 1" 
+          [total]="totalQuestions()"
+          [category]="currentQuestion().category"
+          [difficulty]="currentQuestion().difficulty">
+        </app-progress-bar>
+
+        <div class="telemetry-chips">
+          <div class="t-chip" title="Tiempo activo en resolver este ejercicio">
+            <span class="chip-icon">⏱️</span>
+            <span class="chip-val">{{ timerService.formattedElapsed() }}</span>
+          </div>
+
+          <div class="t-chip" title="Latencia inicial antes de interactuar con el entorno">
+            <span class="chip-icon">⚡</span>
+            <span class="chip-label">Inactividad:</span>
+            <span class="chip-val">
+              @if (timerService.hasInteracted()) {
+                {{ timerService.inactivitySeconds() }}s
+              } @else {
+                <span class="pulse-measuring">Midiendo...</span>
+              }
+            </span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tarjeta del ejercicio -->
+      <article class="exercise-card">
+        <header class="card-head">
+          <h2 class="exercise-title">{{ currentQuestion().title }}</h2>
+          <p class="exercise-desc">{{ currentQuestion().description }}</p>
+        </header>
+
+        <!-- Bloque de código con estética IDE moderna -->
+        @if (currentQuestion().codeSnippet) {
+          <div class="code-box">
+            <div class="code-head">
+              <div class="dots">
+                <span class="d d-red"></span>
+                <span class="d d-yellow"></span>
+                <span class="d d-green"></span>
+              </div>
+              <span class="lang-tag">{{ currentQuestion().codeLanguage || 'typescript' }}</span>
+            </div>
+            <pre class="code-body"><code>{{ currentQuestion().codeSnippet }}</code></pre>
+          </div>
+        }
+
+        <!-- Opciones de respuesta -->
+        <div class="options-stack" role="radiogroup">
+          @for (option of currentQuestion().options; track $index) {
+            <button 
+              type="button" 
+              class="option-btn"
+              [class.selected]="selectedOption() === $index"
+              [disabled]="isEvaluating() || activeFatigueAlert() !== null"
+              (click)="selectOption($index)">
+              <div class="option-idx">
+                <span>{{ ['A', 'B', 'C', 'D'][$index] }}</span>
+              </div>
+              <div class="option-content">{{ option }}</div>
+            </button>
+          }
+        </div>
+
+        <!-- Pie con botón de confirmación -->
+        <footer class="card-footer">
+          <div class="footer-privacy-note">
+            <span class="shield-icon">🛡️</span>
+            <span>Telemetría biomarcadora activa: evaluación continua para tu bienestar cognitivo.</span>
+          </div>
+
+          <button 
+            type="button" 
+            class="btn btn-submit"
+            [disabled]="selectedOption() === null || isEvaluating() || activeFatigueAlert() !== null"
+            (click)="submitAnswer()">
+            @if (isEvaluating()) {
+              <span class="spinner"></span>
+              <span>Evaluando con IA...</span>
+            } @else {
+              <span>Confirmar Respuesta</span>
+              <span class="arrow">→</span>
+            }
+          </button>
+        </footer>
+      </article>
+    </div>
+  }
+
+  <!-- Modal de pausa activa multimodal si el modelo ONNX detecta fatiga cognitiva -->
+  <app-fatigue-modal 
+    [alert]="activeFatigueAlert()"
+    [intervention]="activeFatigueAlert()?.intervention || null"
+    (onDismiss)="onDismissAlert()"
+    (onResume)="onResumeFromBreak()">
+  </app-fatigue-modal>
+</div>
