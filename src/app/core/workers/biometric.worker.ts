@@ -83,7 +83,14 @@ function euclideanDistance(p1: Point2D, p2: Point2D): number {
 }
 
 /**
- * Cálculo de EAR (Eye Aspect Ratio):
+ * Cálculo de EAR (Eye Aspect Ratio) basado en el algoritmo de Tereza Soukupová y Jan Čech (2016):
+ * "Real-Time Eye Blink Detection using Facial Landmarks".
+ *
+ * Mapeo de índices MediaPipe Face Mesh:
+ * - Ojo Izquierdo: p1=33, p2=160, p3=158, p4=133, p5=153, p6=144
+ * - Ojo Derecho:   p1=362, p2=385, p3=387, p4=263, p5=373, p6=380
+ *
+ * Fórmula:
  * EAR = (||p2 - p6|| + ||p3 - p5||) / (2 * ||p1 - p4||)
  */
 function calculateEyeEAR(
