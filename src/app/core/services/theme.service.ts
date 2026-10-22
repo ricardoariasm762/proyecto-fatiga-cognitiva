@@ -2,6 +2,15 @@ import { Injectable, signal, computed } from '@angular/core';
 
 export type ThemeMode = 'dark' | 'light';
 
+/**
+ * ThemeService — Gestor de Temas Reactivo Biomimético (Stitch Design System).
+ *
+ * Responsabilidades:
+ * - Detecta automáticamente el modo de color del sistema (`prefers-color-scheme`).
+ * - Escucha cambios en tiempo real del sistema operativo mediante MediaQueryList.
+ * - Soporta alternancia manual con persistencia en `localStorage`.
+ * - Sincroniza el atributo `data-theme` y las clases `dark` / `light` en el elemento raíz `<html>`.
+ */
 @Injectable({
   providedIn: 'root'
 })
