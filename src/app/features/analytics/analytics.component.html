@@ -1,0 +1,244 @@
+<div class="analytics-container">
+  
+  <!-- CABECERA DEL DASHBOARD -->
+  <header class="dash-header">
+    <div class="dash-title-group">
+      <h1 class="dash-title">Dashboard de Telemetría y Fatiga Cognitiva</h1>
+      <p class="dash-subtitle">
+        Visualización de biomarcadores de interacción, tiempos de respuesta e inferencias generadas por el modelo ONNX.
+      </p>
+    </div>
+
+    <div class="dash-actions">
+      <button type="button" class="btn btn-secondary" (click)="syncWithBackendDatabase()" [disabled]="isLoadingDb()">
+        {{ isLoadingDb() ? '⏳ Consultando...' : '🔄 Sincronizar DB' }}
+      </button>
+
+      <button type="button" class="btn btn-secondary" (click)="exportJsonReport()" [disabled]="logs().length === 0">
+        📥 Exportar JSON
+      </button>
+
+      <button type="button" class="btn btn-primary" (click)="goToEvaluation()">
+        ✍️ Ir a la Evaluación
+      </button>
+    </div>
+  </header>
+
+  <!-- TARJETAS DE MÉTRICAS GLOBALES (KPIs) -->
+  <section class="kpi-grid">
+    <div class="kpi-card">
+      <span class="kpi-title">Aciertos / Total</span>
+      <span class="kpi-value text-accent">{{ correctCount() }} / {{ totalAttempts() }}</span>
+      <span class="kpi-sub">Precisión: {{ accuracyPercent() }}%</span>
+    </div>
+
+    <div class="kpi-card">
+      <span class="kpi-title">Tiempo Promedio</span>
+      <span class="kpi-value text-primary">{{ averageResponseTime() }}s</span>
+      <span class="kpi-sub">Por ejercicio resuelto</span>
+    </div>
+
+    <div class="kpi-card">
+      <span class="kpi-title">Inactividad Promedio</span>
+      <span class="kpi-value text-cyan">{{ averageInactivityTime() }}s</span>
+      <span class="kpi-sub">Pausa antes de interactuar</span>
+    </div>
+
+    <div class="kpi-card">
+      <span class="kpi-title">Alertas de Fatiga</span>
+      <span class="kpi-value" [class.text-danger]="fatigueEpisodesCount() > 0" [class.text-success]="fatigueEpisodesCount() === 0">
+        {{ fatigueEpisodesCount() }}
+      </span>
+      <span class="kpi-sub">Detectadas por modelo ONNX</span>
+    </div>
+  </section>
+
+  <!-- CASO VACÍO: AÚN NO SE HAN RESUELTO EJERCICIOS -->
+  @if (logs().length === 0) {
+    <div class="empty-analytics-card">
+      <div class="empty-icon">📊</div>
+      <h3>No hay datos de telemetría registrados en esta sesión</h3>
+      <p>Inicia el cuestionario pedagógico para que el sistema capture tus biomarcadores pasivos y evalúe la atención en tiempo real.</p>
+      <button type="button" class="btn btn-primary" (click)="goToEvaluation()">
+        Comenzar Evaluación
+      </button>
+    </div>
+  }
+
+  <!-- TABS DE DETALLE Y GRÁFICAS -->
+  @else {
+    <div class="tabs-nav">
+      <button 
+        type="button" 
+        class="tab-btn" 
+        [class.active]="activeTab() === 'graficas'" 
+        (click)="activeTab.set('graficas')">
+        📈 Gráficas de Evolución Temporal
+      </button>
+
+      <button 
+        type="button" 
+        class="tab-btn" 
+        [class.active]="activeTab() === 'sesion'" 
+        (click)="activeTab.set('sesion')">
+        📋 Historial de Telemetría ({{ logs().length }})
+      </button>
+
+      <button 
+        type="button" 
+        class="tab-btn" 
+        [class.active]="activeTab() === 'json'" 
+        (click)="activeTab.set('json')">
+        🗄️ Persistencia PostgreSQL ({{ dbInteractions().length }})
+      </button>
+    </div>
+
+    <!-- TAB 1: GRÁFICAS DE EVOLUCIÓN TEMPORAL -->
+    @if (activeTab() === 'graficas') {
+      <div class="chart-section-card">
+        <div class="chart-head">
+          <h3 class="chart-title">Evolución de Tiempos de Respuesta por Pregunta</h3>
+          <div class="legend">
+            <span class="legend-item"><span class="legend-dot dot-normal"></span> Normal (&lt;65s)</span>
+            <span class="legend-item"><span class="legend-dot dot-fatigue"></span> Fatiga / Alerta (&gt;65s)</span>
+          </div>
+        </div>
+
+        <!-- Gráfica de barras responsiva con CSS y Flexbox -->
+        <div class="barchart-container">
+          @for (log of logs(); track log.payload.exerciseIndex) {
+            <div class="bar-column">
+              <span class="bar-val-label">{{ log.payload.responseTimeSeconds }}s</span>
+              
+              <div class="bar-track">
+                <div 
+                  class="bar-fill" 
+                  [class.bar-fatigued]="log.result.fatigueDetected"
+                  [style.height.%]="(log.payload.responseTimeSeconds / maxResponseTime()) * 100">
+                </div>
+              </div>
+
+              <span class="bar-x-label">Ej. {{ log.payload.exerciseIndex }}</span>
+              <span class="bar-tag" [class.tag-correct]="log.payload.isCorrect" [class.tag-wrong]="!log.payload.isCorrect">
+                {{ log.payload.isCorrect ? '✓' : '✗' }}
+              </span>
+            </div>
+          }
+        </div>
+
+        <div class="inactivity-bars-section">
+          <h4 class="subchart-title">Latencia de Inactividad Inicial por Ejercicio</h4>
+          <div class="inactivity-grid">
+            @for (log of logs(); track log.payload.exerciseIndex) {
+              <div class="inact-item">
+                <span class="inact-name">Pregunta {{ log.payload.exerciseIndex }}</span>
+                <div class="inact-track">
+                  <div class="inact-fill" [style.width.%]="Math.min(100, (log.payload.inactivitySeconds / 20) * 100)"></div>
+                </div>
+                <span class="inact-val">{{ log.payload.inactivitySeconds }}s</span>
+              </div>
+            }
+          </div>
+        </div>
+      </div>
+    }
+
+    <!-- TAB 2: TABLA DE HISTORIAL DE TELEMETRÍA -->
+    @if (activeTab() === 'sesion') {
+      <div class="table-card">
+        <div class="table-header">
+          <h3 class="table-title">Registros Capturados en la Sesión Activa</h3>
+          <span class="session-badge">Sesión: {{ telemetryService.sessionId().substring(0, 8) }}...</span>
+        </div>
+
+        <div class="table-scroll">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Ejercicio</th>
+                <th>Resultado</th>
+                <th>Tiempo Total</th>
+                <th>Inactividad Inicial</th>
+                <th>Diagnóstico IA</th>
+                <th>Certeza ONNX</th>
+                <th>Recomendación</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (entry of logs(); track entry.payload.exerciseIndex) {
+                <tr>
+                  <td><strong>#{{ entry.payload.exerciseIndex }}</strong></td>
+                  <td>
+                    <span class="pill" [class.pill-success]="entry.payload.isCorrect" [class.pill-danger]="!entry.payload.isCorrect">
+                      {{ entry.payload.isCorrect ? 'Correcto' : 'Fallo' }}
+                    </span>
+                  </td>
+                  <td>{{ entry.payload.responseTimeSeconds }}s</td>
+                  <td>{{ entry.payload.inactivitySeconds }}s</td>
+                  <td>
+                    <app-stat-badge [status]="entry.result.status"></app-stat-badge>
+                  </td>
+                  <td><strong>{{ (entry.result.confidenceScore * 100).toFixed(0) }}%</strong></td>
+                  <td class="rec-cell">{{ entry.result.recommendation }}</td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      </div>
+    }
+
+    <!-- TAB 3: BASE DE DATOS POSTGRESQL -->
+    @if (activeTab() === 'json') {
+      <div class="table-card">
+        <div class="table-header">
+          <h3 class="table-title">Registros Persistidos en la Tabla PostgreSQL (student_interactions)</h3>
+          <button type="button" class="btn btn-secondary btn-sm" (click)="syncWithBackendDatabase()">
+            Actualizar Consulta
+          </button>
+        </div>
+
+        @if (dbInteractions().length === 0) {
+          <div class="db-empty">
+            <p>No se encontraron registros persistidos en base de datos para esta sesión (o el backend en Spring Boot aún no ha procesado registros).</p>
+          </div>
+        } @else {
+          <div class="table-scroll">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>ID DB</th>
+                  <th>Alumno</th>
+                  <th>Ejercicio</th>
+                  <th>Delta Ratio</th>
+                  <th>Tasa Error</th>
+                  <th>Fatiga Detectada</th>
+                  <th>Confianza</th>
+                  <th>Fecha/Hora Registro</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (dbItem of dbInteractions(); track dbItem.id) {
+                  <tr>
+                    <td><code>#{{ dbItem.id }}</code></td>
+                    <td>{{ dbItem.studentId }}</td>
+                    <td>#{{ dbItem.exerciseIndex }}</td>
+                    <td>{{ dbItem.deltaRatio }}</td>
+                    <td>{{ dbItem.errorRate }}</td>
+                    <td>
+                      <span class="pill" [class.pill-danger]="dbItem.fatigueDetected" [class.pill-success]="!dbItem.fatigueDetected">
+                        {{ dbItem.fatigueDetected ? 'SÍ (FATIGA)' : 'NO (ÓPTIMO)' }}
+                      </span>
+                    </td>
+                    <td>{{ (dbItem.confidenceScore || 0) * 100 }}%</td>
+                    <td>{{ dbItem.createdAt }}</td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        }
+      </div>
+    }
+  }
+</div>
