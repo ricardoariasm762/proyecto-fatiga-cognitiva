@@ -1,0 +1,269 @@
+<div class="shell-container">
+  
+  <!-- ==========================================
+       BARRA DE COMANDO SUPERIOR (TELEMETRIC COMMAND BAR)
+       ========================================== -->
+  <header class="shell-navbar">
+    <div class="nav-left">
+      <button type="button" class="btn-sidebar-toggle" (click)="toggleSidebar()" title="Alternar panel de navegación">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <line x1="3" y1="12" x2="21" y2="12"/>
+          <line x1="3" y1="6" x2="21" y2="6"/>
+          <line x1="3" y1="18" x2="21" y2="18"/>
+        </svg>
+      </button>
+
+      <div class="brand-group">
+        <div class="brand-logo">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="brand-svg">
+            <circle cx="12" cy="12" r="9" stroke="rgba(255,255,255,0.4)"/>
+            <circle cx="12" cy="12" r="4" fill="currentColor"/>
+            <path d="M12 3v3m0 12v3M3 12h3m12 0h3"/>
+          </svg>
+        </div>
+        <div class="brand-meta">
+          <div class="brand-title-row">
+            <span class="brand-title">NEUROEDU</span>
+            <span class="brand-chip-os">VISION OS</span>
+          </div>
+          <span class="brand-sub">Biometric Cognitive Telemetry Suite</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- CÁPSULA CENTRAL DE ESTADO Y TELEMETRÍA (DYNAMIC ISLAND) -->
+    <div class="telemetry-capsule">
+      <div class="capsule-item live-indicator" [class.is-live]="visionService.isCameraActive()">
+        <span class="capsule-dot"></span>
+        <span class="capsule-txt">{{ visionService.isCameraActive() ? 'LIVE 30 FPS' : 'STANDBY' }}</span>
+      </div>
+
+      <div class="capsule-divider"></div>
+
+      <div class="capsule-item" [title]="'ID de Sesión: ' + visionService.sessionId()">
+        <span class="capsule-muted">ID:</span>
+        <span class="capsule-bold">{{ visionService.studentId() }}</span>
+      </div>
+
+      <div class="capsule-divider"></div>
+
+      <!-- Estado Spring Boot -->
+      <div class="capsule-item backend-status">
+        @if (visionService.isBackendReachable() === true) {
+          <span class="status-indicator-dot online"></span>
+          <span class="capsule-txt">Spring Boot: OK</span>
+        } @else if (visionService.isBackendReachable() === false) {
+          <span class="status-indicator-dot offline"></span>
+          <span class="capsule-txt">Modo Resiliente</span>
+        } @else {
+          <span class="status-indicator-dot idle"></span>
+          <span class="capsule-txt">Conectando...</span>
+        }
+      </div>
+    </div>
+
+    <!-- CONTROLES GLOBALES DE LA BARRA -->
+    <div class="nav-right">
+      <!-- Botón de Alternancia Modo Claro / Oscuro (Stitch Ethereal Biomimetic) -->
+      <button 
+        type="button" 
+        class="btn-tool btn-theme-toggle" 
+        (click)="toggleTheme()"
+        [title]="themeService.isDark() ? 'Cambiar a Modo Claro (Actualmente: Oscuro)' : 'Cambiar a Modo Oscuro (Actualmente: Claro)'">
+        @if (themeService.isDark()) {
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="theme-icon sun-icon">
+            <circle cx="12" cy="12" r="5"/>
+            <line x1="12" y1="1" x2="12" y2="3"/>
+            <line x1="12" y1="21" x2="12" y2="23"/>
+            <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/>
+            <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/>
+            <line x1="1" y1="12" x2="3" y2="12"/>
+            <line x1="21" y1="12" x2="23" y2="12"/>
+            <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/>
+            <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
+          </svg>
+          <span>Claro</span>
+        } @else {
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="theme-icon moon-icon">
+            <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+          </svg>
+          <span>Oscuro</span>
+        }
+      </button>
+
+      <!-- Acceso rápido a Picture-in-Picture en Navbar -->
+      <button 
+        type="button" 
+        class="btn-tool btn-pip-nav" 
+        [class.active]="visionService.isPipActive()"
+        (click)="togglePip()"
+        title="Activar ventana flotante Picture-in-Picture">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <rect x="2" y="3" width="20" height="14" rx="2" ry="2"/>
+          <rect x="11" y="9" width="9" height="7" rx="1" ry="1"/>
+        </svg>
+        <span>{{ visionService.isPipActive() ? 'PiP Activo' : 'Ventana PiP' }}</span>
+      </button>
+
+      <!-- Botón de Simulación de Fatiga -->
+      <button 
+        type="button" 
+        class="btn-tool btn-simulation" 
+        [class.active]="visionService.simulationActive()"
+        (click)="toggleSimulation()"
+        title="Simular fatiga crítica activa en los sensores">
+        <span class="sim-bolt">⚡</span>
+        <span>Simulación: {{ visionService.simulationActive() ? 'ON' : 'OFF' }}</span>
+      </button>
+
+      <!-- Botón de Auditoría e Inspector de Telemetría -->
+      <button 
+        type="button" 
+        class="btn-tool btn-inspector" 
+        [class.active]="showInspector()"
+        (click)="toggleInspector()"
+        title="Abrir inspector de JSON de telemetría biométrica">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <polyline points="16 18 22 12 16 6"/>
+          <polyline points="8 6 2 12 8 18"/>
+        </svg>
+        <span>Inspector</span>
+      </button>
+    </div>
+  </header>
+
+  <!-- ==========================================
+       CUERPO PRINCIPAL (SIDEBAR + ROUTER-OUTLET)
+       ========================================== -->
+  <div class="shell-body">
+    
+    <!-- Sidebar de Navegación con Iconografía Vectorial Limpia -->
+    <aside class="shell-sidebar" [class.collapsed]="!isSidebarOpen()">
+      <nav class="sidebar-nav">
+        <!-- Monitoreo Biométrico -->
+        <a routerLink="/biometria" routerLinkActive="active" class="nav-item" title="Monitoreo Biométrico en Tiempo Real">
+          <span class="item-icon-svg">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+              <circle cx="12" cy="12" r="3"/>
+            </svg>
+          </span>
+          <span class="item-label">Estudio Biométrico</span>
+          @if (visionService.isCameraActive()) {
+            <span class="item-badge live">LIVE</span>
+          }
+        </a>
+
+        <!-- Test Cognitivo -->
+        <a routerLink="/evaluacion" routerLinkActive="active" class="nav-item" title="Evaluación Cognitiva Interactiva">
+          <span class="item-icon-svg">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+              <polyline points="14 2 14 8 20 8"/>
+              <line x1="16" y1="13" x2="8" y2="13"/>
+              <line x1="16" y1="17" x2="8" y2="17"/>
+              <polyline points="10 9 9 9 8 9"/>
+            </svg>
+          </span>
+          <span class="item-label">Test Cognitivo</span>
+        </a>
+
+        <!-- Dashboard & Gráficas -->
+        <a routerLink="/dashboard" routerLinkActive="active" class="nav-item" title="Dashboard de Telemetría">
+          <span class="item-icon-svg">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="18" y1="20" x2="18" y2="10"/>
+              <line x1="12" y1="20" x2="12" y2="4"/>
+              <line x1="6" y1="20" x2="6" y2="14"/>
+            </svg>
+          </span>
+          <span class="item-label">Dashboard</span>
+        </a>
+
+        <!-- Auditoría PostgreSQL -->
+        <a routerLink="/historial" routerLinkActive="active" class="nav-item" title="Auditoría de Base de Datos PostgreSQL">
+          <span class="item-icon-svg">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <ellipse cx="12" cy="5" rx="9" ry="3"/>
+              <path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/>
+              <path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/>
+            </svg>
+          </span>
+          <span class="item-label">Auditoría DB</span>
+        </a>
+      </nav>
+
+      <div class="sidebar-footer">
+        <div class="system-status-indicator">
+          <span class="system-version">NeuroEdu Vision v2.0</span>
+          <span class="system-engine">MediaPipe 30FPS • Spring Boot 3</span>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Área de Vistas Enrutadas -->
+    <main class="shell-main">
+      <router-outlet></router-outlet>
+    </main>
+  </div>
+
+  <!-- ==========================================
+       DRAWER / INSPECTOR DE TELEMETRÍA JSON
+       ========================================== -->
+  @if (showInspector()) {
+    <aside class="inspector-drawer" role="complementary" aria-label="Inspector de Telemetría Biométrica">
+      <div class="drawer-header">
+        <h3 class="drawer-title">Inspector Biométrico en Tiempo Real</h3>
+        <button type="button" class="btn-drawer-close" (click)="toggleInspector()">✕</button>
+      </div>
+
+      <div class="drawer-body">
+        <div class="drawer-block">
+          <span class="block-title">Endpoint de Telemetría Spring Boot</span>
+          <div class="endpoint-chip">
+            <span class="ep-method">POST</span>
+            <span class="ep-url">http://localhost:8080/api/telemetry/biometrics</span>
+          </div>
+        </div>
+
+        <div class="drawer-block">
+          <span class="block-title">Métricas Faciales Instantáneas (Signals)</span>
+          <pre class="json-code"><code>{{ {
+  studentId: visionService.studentId(),
+  sessionId: visionService.sessionId(),
+  ear: visionService.currentEar(),
+  mar: visionService.currentMar(),
+  blinks: visionService.blinkCount(),
+  yawns: visionService.yawnCount(),
+  fatigueScore: visionService.fatigueScore(),
+  fatigueStatus: visionService.fatigueStatus(),
+  microsleeping: visionService.isMicrosleeping(),
+  blinksPerMinute: visionService.blinksPerMinute()
+} | json }}</code></pre>
+        </div>
+
+        <div class="drawer-block">
+          <span class="block-title">Última Intervención de Voz (Spring AI)</span>
+          @if (visionService.lastIntervention(); as lastInterv) {
+            <pre class="json-code"><code>{{ lastInterv | json }}</code></pre>
+          } @else {
+            <p class="json-empty">Sin intervenciones de fatiga crítica activadas en esta sesión.</p>
+          }
+        </div>
+
+        <div class="drawer-block">
+          <span class="block-title">Historial de Eventos Biométricos ({{ visionService.recentEvents().length }})</span>
+          <div class="mini-logs-list">
+            @for (item of visionService.recentEvents(); track $index) {
+              <div class="mini-log">
+                <span class="log-t">{{ item.time }}</span>
+                <span class="log-q">{{ item.type | uppercase }}</span>
+                <span class="log-status">{{ item.message }}</span>
+              </div>
+            }
+          </div>
+        </div>
+      </div>
+    </aside>
+  }
+</div>
