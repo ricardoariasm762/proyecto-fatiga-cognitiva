@@ -1,0 +1,566 @@
+<div class="biometrics-container" [ngClass]="'view-' + viewMode()">
+  
+  <!-- =========================================================================
+       1. ENCABEZADO DE ESTUDIO COMPACTO (Saves vertical space for the Camera)
+       ========================================================================= -->
+  <!-- =========================================================================
+       1. BARRA DE CONTROL DEL ESTUDIO (ULTRA-SLIM, MAXIMIZA EL ESPACIO DE LA CÁMARA)
+       ========================================================================= -->
+  <header class="studio-top-strip">
+    <div class="strip-left">
+      <div class="live-pill" [class.live]="visionService.isCameraActive()">
+        <span class="pulsing-core"></span>
+        <span class="live-text">{{ visionService.isCameraActive() ? 'STREAM LIVE 30 FPS' : 'SENSOR EN ESPERA' }}</span>
+      </div>
+      <div class="strip-title-group">
+        <h1 class="strip-title">Estudio Biométrico Ocular & Facial</h1>
+        <span class="strip-tag">MediaPipe 468 Landmarks</span>
+      </div>
+    </div>
+
+    <!-- Controles Rápidos y Selector de Modo de Vista -->
+    <div class="strip-right">
+      <!-- Selector de Modo de Vista -->
+      <div class="view-mode-selector" role="group" aria-label="Modo de visualización">
+        <button 
+          type="button" 
+          class="mode-btn" 
+          [class.active]="viewMode() === 'studio'"
+          (click)="setViewMode('studio')"
+          title="Modo Estudio: Cámara protagónica amplia al centro con HUD">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="2" y="3" width="20" height="14" rx="2"/>
+            <line x1="8" y1="21" x2="16" y2="21"/>
+            <line x1="12" y1="17" x2="12" y2="21"/>
+          </svg>
+          <span>Estudio</span>
+        </button>
+
+        <button 
+          type="button" 
+          class="mode-btn" 
+          [class.active]="viewMode() === 'split'"
+          (click)="setViewMode('split')"
+          title="Modo Dividido: Cámara y telemetría analítica en columnas paralelas">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="3" y="3" width="18" height="18" rx="2"/>
+            <line x1="12" y1="3" x2="12" y2="21"/>
+          </svg>
+          <span>Dividida</span>
+        </button>
+
+        <button 
+          type="button" 
+          class="mode-btn" 
+          [class.active]="viewMode() === 'theater'"
+          (click)="setViewMode('theater')"
+          title="Modo Teatro: Cámara en ancho completo inmersivo">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/>
+          </svg>
+          <span>Teatro</span>
+        </button>
+      </div>
+
+      <!-- Chip de Rostro -->
+      <div class="face-chip" [class.detected]="visionService.faceDetected()">
+        <span class="face-dot"></span>
+        <span>{{ visionService.faceDetected() ? 'Rostro Identificado' : 'Buscando Rostro' }}</span>
+      </div>
+
+      <!-- Medidor de FPS -->
+      <div class="fps-chip">
+        <span class="fps-val">{{ visionService.fps() }}</span>
+        <span class="fps-tag">FPS</span>
+      </div>
+
+      <!-- Botón de Simulación de Fatiga -->
+      <button 
+        type="button" 
+        class="action-btn btn-sim-toggle" 
+        [class.active]="visionService.simulationActive()"
+        (click)="visionService.toggleSimulation()"
+        title="Simular fatiga crítica activa en los sensores">
+        ⚡ Sim: {{ visionService.simulationActive() ? 'ON' : 'OFF' }}
+      </button>
+
+      <!-- Botón de Pausa Zen / Mindfulness -->
+      <button 
+        type="button" 
+        class="action-btn btn-zen-quick" 
+        (click)="openZenModal()"
+        title="Iniciar pausa activa guiada de 3 minutos">
+        🌿 Pausa Zen
+      </button>
+    </div>
+  </header>
+
+  <!-- =========================================================================
+       2. ESCENARIO PROTAGÓNICO DE CÁMARA (THE HERO CAMERA STAGE)
+       ========================================================================= -->
+  <section class="camera-hero-stage" [class.theater-mode]="isTheaterMode()">
+    
+    <div class="stage-frame">
+      <!-- Retículas y Guías de Escaneo Facial Cyber-Medical -->
+      <div class="tracking-reticle reticle-tl"></div>
+      <div class="tracking-reticle reticle-tr"></div>
+      <div class="tracking-reticle reticle-bl"></div>
+      <div class="tracking-reticle reticle-br"></div>
+
+      <!-- Indicador central de encuadre cuando no hay rostro detectado -->
+      @if (visionService.isCameraActive() && !visionService.faceDetected() && !visionService.isModelLoading()) {
+        <div class="face-target-guide">
+          <div class="target-crosshair"></div>
+          <span class="guide-text">Centra tu rostro dentro del encuadre para optimizar el seguimiento</span>
+        </div>
+      }
+
+      <!-- Contenedor del Feed de Video y Canvas de Renderizado MediaPipe -->
+      <div class="viewport-canvas-container">
+        <!-- Video nativo invisible -->
+        <video #webcamVideo autoplay playsinline muted class="native-hidden-video"></video>
+        
+        <!-- Canvas visible con la superposición gráfica de 468 puntos -->
+        <canvas #overlayCanvas class="face-mesh-canvas"></canvas>
+
+        <!-- Video auxiliar para Picture-in-Picture continuo -->
+        <video #pipVideo autoplay playsinline muted class="pip-aux-video"></video>
+      </div>
+
+      <!-- =====================================================================
+           3. HUD FLOTANTE SOBRE EL FEED DE LA CÁMARA (TRANSLUCENT GLASS)
+           ===================================================================== -->
+      @if (visionService.isCameraActive() && showHud()) {
+        
+        <!-- HUD SUPERIOR: Metadatos de la cámara y Estado de Alerta -->
+        <div class="hud-top-bar">
+          <div class="hud-stream-info">
+            <span class="stream-badge">
+              <span class="stream-dot"></span>
+              CAM-01 • 30 FPS • HD 468 LANDMARKS
+            </span>
+          </div>
+
+          <!-- Estado de Vigilancia en Tiempo Real -->
+          <div class="hud-status-badge">
+            @if (visionService.isMicrosleeping()) {
+              <span class="status-pill pill-sleep">⚠️ MICROSUEÑO DETECTADO (&gt;1.5s)</span>
+            } @else if (visionService.isYawning()) {
+              <span class="status-pill pill-yawn">🥱 BOSTEZO ACTIVO (&gt;1.8s)</span>
+            } @else if (visionService.isEyesClosed()) {
+              <span class="status-pill pill-blink">👁️ PÁRPADOS CERRADOS</span>
+            } @else {
+              <span class="status-pill pill-optimal">● VIGILANCIA ÓPTIMA</span>
+            }
+          </div>
+        </div>
+
+        <!-- HUD RIBBON FLOTANTE: Métricas Biométricas Vitales directamente en la Cámara -->
+        <div class="hud-metrics-ribbon">
+          <!-- Métrica EAR -->
+          <div class="hud-metric-pod" [class.pod-alert]="visionService.isEyesClosed()">
+            <div class="pod-icon">👁️</div>
+            <div class="pod-data">
+              <div class="pod-label">EAR (Apertura Ocular)</div>
+              <div class="pod-value text-blue">{{ earDisplay() }}</div>
+            </div>
+            <div class="pod-tag" [class.tag-alert]="visionService.isEyesClosed()">
+              {{ visionService.isEyesClosed() ? 'Cerrado' : 'Abierto' }}
+            </div>
+          </div>
+
+          <!-- Métrica MAR -->
+          <div class="hud-metric-pod" [class.pod-alert]="visionService.isYawning()">
+            <div class="pod-icon">👄</div>
+            <div class="pod-data">
+              <div class="pod-label">MAR (Apertura Labial)</div>
+              <div class="pod-value text-amber">{{ marDisplay() }}</div>
+            </div>
+            <div class="pod-tag" [class.tag-alert]="visionService.isYawning()">
+              {{ visionService.isYawning() ? 'Bostezando' : 'Normal' }}
+            </div>
+          </div>
+
+          <!-- Métrica Ritmo / Cadencia -->
+          <div class="hud-metric-pod">
+            <div class="pod-icon">⚡</div>
+            <div class="pod-data">
+              <div class="pod-label">Cadencia Ocular</div>
+              <div class="pod-value text-cyan">{{ visionService.blinksPerMinute() }} <span class="unit">bpm</span></div>
+            </div>
+            <div class="pod-tag">
+              {{ visionService.blinkCount() }} parpadeos
+            </div>
+          </div>
+
+          <!-- Métrica Nivel de Fatiga Global -->
+          <div class="hud-metric-pod pod-fatigue" [ngClass]="fatigueSeverityClass()">
+            <div class="pod-icon">🧠</div>
+            <div class="pod-data">
+              <div class="pod-label">Fatiga Cognitiva</div>
+              <div class="pod-value value-fatigue">{{ fatiguePercent() }}%</div>
+            </div>
+            <div class="pod-progress-bar">
+              <div class="progress-fill" [style.width.%]="fatiguePercent()"></div>
+            </div>
+          </div>
+        </div>
+
+      }
+
+      <!-- DOCK DE CONTROLES FLOTANTE INFERIOR DE LA CÁMARA -->
+      <div class="camera-floating-dock">
+        <!-- Control de Encendido/Pausa con Feedback Táctil -->
+        <button 
+          type="button" 
+          class="dock-btn btn-power" 
+          [class.btn-power-active]="visionService.isCameraActive()"
+          (click)="toggleCamera()"
+          title="Alternar transmisión de la cámara web">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            @if (visionService.isCameraActive()) {
+              <rect x="6" y="6" width="12" height="12" rx="2" fill="currentColor"/>
+            } @else {
+              <polygon points="5 3 19 12 5 21 5 3" fill="currentColor"/>
+            }
+          </svg>
+          <span>{{ visionService.isCameraActive() ? 'Detener Cámara' : 'Iniciar Cámara' }}</span>
+        </button>
+
+        <!-- Modo Picture-in-Picture Flotante -->
+        <button 
+          type="button" 
+          class="dock-btn btn-pip-dock" 
+          [class.active]="visionService.isPipActive()"
+          (click)="togglePip()"
+          title="Mantener ventana flotante sobre apuntes o videos externos">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="2" y="3" width="20" height="14" rx="2"/>
+            <rect x="11" y="9" width="9" height="7" rx="1"/>
+          </svg>
+          <span>{{ visionService.isPipActive() ? 'Salir de PiP' : 'Modo Flotante PiP' }}</span>
+        </button>
+
+        <!-- Toggle Malla Facial -->
+        <button 
+          type="button" 
+          class="dock-btn" 
+          [class.active]="visionService.showMeshOverlay()"
+          (click)="visionService.toggleMeshOverlay()"
+          title="Mostrar u ocultar los puntos faciales de MediaPipe">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="3"/>
+            <circle cx="6" cy="12" r="1.5"/>
+            <circle cx="18" cy="12" r="1.5"/>
+            <circle cx="12" cy="6" r="1.5"/>
+            <circle cx="12" cy="18" r="1.5"/>
+          </svg>
+          <span>{{ visionService.showMeshOverlay() ? 'Malla Visible' : 'Malla Oculta' }}</span>
+        </button>
+
+        <!-- Toggle HUD Flotante -->
+        <button 
+          type="button" 
+          class="dock-btn" 
+          [class.active]="showHud()"
+          (click)="toggleHud()"
+          title="Alternar visualización de los widgets HUD flotantes">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+            <circle cx="12" cy="12" r="3"/>
+          </svg>
+          <span>{{ showHud() ? 'HUD ON' : 'HUD OFF' }}</span>
+        </button>
+
+        <!-- Toggle Teatro / Expansión -->
+        <button 
+          type="button" 
+          class="dock-btn btn-theater-toggle" 
+          [class.active]="isTheaterMode()"
+          (click)="toggleTheater()"
+          title="Maximizar la cámara al ancho completo del estudio">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="15 3 21 3 21 9"/>
+            <polyline points="9 21 3 21 3 15"/>
+            <line x1="21" y1="3" x2="14" y2="10"/>
+            <line x1="3" y1="21" x2="10" y2="14"/>
+          </svg>
+          <span>{{ isTheaterMode() ? 'Restaurar' : 'Modo Teatro' }}</span>
+        </button>
+      </div>
+
+      <!-- =====================================================================
+           4. PANTALLA DE CARGA DEL MODELO
+           ===================================================================== -->
+      @if (visionService.isModelLoading()) {
+        <div class="stage-overlay stage-loading-overlay">
+          <div class="optic-spinner">
+            <div class="ring outer-ring"></div>
+            <div class="ring inner-ring"></div>
+            <div class="core-dot"></div>
+          </div>
+          <h3 class="loading-title">Inicializando MediaPipe Face Mesh...</h3>
+          <p class="loading-desc">Compilando shaders WebGL y modelos tensoriales de 468 puntos faciales.</p>
+        </div>
+      }
+
+      <!-- =====================================================================
+           5. PANTALLA DE ESPERA / CÁMARA EN REPOSO (HIGH-TECH STANDBY)
+           ===================================================================== -->
+      @if (!visionService.isCameraActive() && !visionService.isModelLoading()) {
+        <div class="stage-overlay stage-standby-overlay">
+          <div class="standby-scanner-icon">
+            <svg viewBox="0 0 100 100" class="scanner-svg" fill="none" stroke="currentColor">
+              <circle cx="50" cy="50" r="42" stroke="rgba(99, 102, 241, 0.25)" stroke-width="2" stroke-dasharray="6,6"/>
+              <circle cx="50" cy="50" r="32" stroke="rgba(6, 182, 212, 0.35)" stroke-width="2"/>
+              <circle cx="50" cy="50" r="18" stroke="#6366f1" stroke-width="2"/>
+              <circle cx="50" cy="50" r="5" fill="#38bdf8"/>
+              <!-- Crosshairs -->
+              <line x1="50" y1="12" x2="50" y2="28" stroke="#38bdf8" stroke-width="2"/>
+              <line x1="50" y1="72" x2="50" y2="88" stroke="#38bdf8" stroke-width="2"/>
+              <line x1="12" y1="50" x2="28" y2="50" stroke="#38bdf8" stroke-width="2"/>
+              <line x1="72" y1="50" x2="88" y2="50" stroke="#38bdf8" stroke-width="2"/>
+            </svg>
+          </div>
+
+          <h2 class="standby-title">Sensor Biométrico en Espera</h2>
+          <p class="standby-description">
+            Inicia la cámara para activar el seguimiento continuo de parpadeo ocular (EAR), 
+            apertura bucal (MAR) y detección multimodal de fatiga cognitiva en tiempo real.
+          </p>
+
+          <!-- Botón de Acción Principal (Crafted con respuesta táctil scale 0.97) -->
+          <button type="button" class="btn-start-hero" (click)="toggleCamera()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" class="btn-icon">
+              <polygon points="5 3 19 12 5 21 5 3" fill="currentColor"/>
+            </svg>
+            <span>Iniciar Monitoreo Biométrico</span>
+          </button>
+
+          <!-- Garantía de Privacidad Edge / En el Dispositivo -->
+          <div class="standby-privacy-notice">
+            <span class="privacy-shield">🛡️ Privacidad Local:</span>
+            <span>El análisis se procesa enteramente en la GPU/WebAssembly de tu navegador. El video jamás sale de tu dispositivo.</span>
+          </div>
+        </div>
+      }
+
+    </div>
+
+  </section>
+
+  <!-- =========================================================================
+       6. CONSOLA COMPLEMENTARIA DE TELEMETRÍA Y CONTROL ANALÍTICO
+       ========================================================================= -->
+  <div class="telemetry-deck" [class.deck-hidden]="isTheaterMode() && !showHud()">
+    
+    <!-- FILA 1: KPIs RESUMIDOS (Si el HUD flotante está oculto o en Modo Split) -->
+    <div class="telemetry-kpi-grid">
+      
+      <!-- CARD EAR -->
+      <div class="kpi-card kpi-ear">
+        <div class="kpi-header">
+          <span class="kpi-title">EAR (Eye Aspect Ratio)</span>
+          <span class="kpi-badge" [class.badge-warn]="visionService.isEyesClosed()">
+            {{ visionService.isEyesClosed() ? 'Párpados Cerrados' : 'Apertura Normal' }}
+          </span>
+        </div>
+        <div class="kpi-body">
+          <div class="kpi-number text-blue">{{ earDisplay() }}</div>
+          <div class="kpi-substats">
+            <span>Parpadeos: <strong>{{ visionService.blinkCount() }}</strong></span>
+            <span>Cadencia: <strong>{{ visionService.blinksPerMinute() }} bpm</strong></span>
+          </div>
+        </div>
+        <div class="kpi-footer">
+          <span>Umbral parpadeo &lt; 0.22 • Microsueño &lt; 0.20 (&gt;1.5s)</span>
+        </div>
+      </div>
+
+      <!-- CARD MAR -->
+      <div class="kpi-card kpi-mar">
+        <div class="kpi-header">
+          <span class="kpi-title">MAR (Mouth Aspect Ratio)</span>
+          <span class="kpi-badge" [class.badge-warn]="visionService.isYawning()">
+            {{ visionService.isYawning() ? 'Bostezo Activo' : 'Cierre Normal' }}
+          </span>
+        </div>
+        <div class="kpi-body">
+          <div class="kpi-number text-amber">{{ marDisplay() }}</div>
+          <div class="kpi-substats">
+            <span>Bostezos: <strong>{{ visionService.yawnCount() }}</strong></span>
+            <span>Microsueños: <strong>{{ visionService.microsleepCount() }}</strong></span>
+          </div>
+        </div>
+        <div class="kpi-footer">
+          <span>Umbral bostezo sostenido &gt; 0.65 (&gt;1.8s)</span>
+        </div>
+      </div>
+
+      <!-- CARD FATIGA -->
+      <div class="kpi-card kpi-fatigue" [ngClass]="fatigueSeverityClass()">
+        <div class="kpi-header">
+          <span class="kpi-title">Índice de Fatiga Global</span>
+          <span class="kpi-badge badge-fatigue-level">
+            {{ visionService.fatigueStatus() }}
+          </span>
+        </div>
+        <div class="kpi-body">
+          <div class="kpi-number value-fatigue">{{ fatiguePercent() }}%</div>
+          <div class="kpi-progress">
+            <div class="progress-bar-fill" [style.width.%]="fatiguePercent()"></div>
+          </div>
+        </div>
+        <div class="kpi-footer">
+          <span>Alerta Crítica &ge; 80% (Activa tutor de voz y respiración)</span>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- FILA 2: SPARKLINES & VOICE COMPANION -->
+    <div class="deck-split-row">
+      
+      <!-- Panel de Gráficas de Señales Continuas en Tiempo Real -->
+      <div class="analytics-card sparklines-card">
+        <div class="card-head-row">
+          <h3 class="card-section-title">Series Temporales en Tiempo Real (Ventana Deslizante 60s)</h3>
+          <span class="card-tag-mono">Web Worker 30 FPS</span>
+        </div>
+
+        <div class="sparklines-container">
+          <!-- Gráfica EAR -->
+          <div class="sparkline-row">
+            <div class="sparkline-info">
+              <span class="sparkline-name text-blue">📈 EAR (Apertura Ocular)</span>
+              <span class="sparkline-current">{{ earDisplay() }}</span>
+            </div>
+            <div class="sparkline-canvas-box">
+              <svg viewBox="0 0 320 60" preserveAspectRatio="none" class="sparkline-svg">
+                <line x1="0" y1="36" x2="320" y2="36" stroke="rgba(239, 68, 68, 0.4)" stroke-dasharray="3,3" stroke-width="1"/>
+                <text x="6" y="32" fill="rgba(239, 68, 68, 0.7)" font-size="8">Umbral 0.22</text>
+                <path [attr.d]="generateAreaPath(visionService.earHistory(), 0.10, 0.40)" fill="rgba(56, 189, 248, 0.15)"/>
+                <path [attr.d]="generateSparklinePath(visionService.earHistory(), 0.10, 0.40)" fill="none" stroke="#38bdf8" stroke-width="2"/>
+              </svg>
+            </div>
+          </div>
+
+          <!-- Gráfica MAR -->
+          <div class="sparkline-row">
+            <div class="sparkline-info">
+              <span class="sparkline-name text-amber">📈 MAR (Apertura Labial)</span>
+              <span class="sparkline-current">{{ marDisplay() }}</span>
+            </div>
+            <div class="sparkline-canvas-box">
+              <svg viewBox="0 0 320 60" preserveAspectRatio="none" class="sparkline-svg">
+                <line x1="0" y1="17" x2="320" y2="17" stroke="rgba(245, 158, 11, 0.5)" stroke-dasharray="3,3" stroke-width="1"/>
+                <text x="6" y="14" fill="rgba(245, 158, 11, 0.8)" font-size="8">Umbral Bostezo 0.65</text>
+                <path [attr.d]="generateAreaPath(visionService.marHistory(), 0.00, 0.90)" fill="rgba(245, 158, 11, 0.15)"/>
+                <path [attr.d]="generateSparklinePath(visionService.marHistory(), 0.00, 0.90)" fill="none" stroke="#f59e0b" stroke-width="2"/>
+              </svg>
+            </div>
+          </div>
+
+          <!-- Gráfica Fatiga -->
+          <div class="sparkline-row">
+            <div class="sparkline-info">
+              <span class="sparkline-name" [class.text-red]="visionService.fatigueScore() >= 0.8" [class.text-green]="visionService.fatigueScore() < 0.5">
+                📈 Fatiga Cognitiva Calculada
+              </span>
+              <span class="sparkline-current">{{ fatiguePercent() }}%</span>
+            </div>
+            <div class="sparkline-canvas-box">
+              <svg viewBox="0 0 320 60" preserveAspectRatio="none" class="sparkline-svg">
+                <line x1="0" y1="12" x2="320" y2="12" stroke="rgba(239, 68, 68, 0.6)" stroke-dasharray="3,3" stroke-width="1"/>
+                <text x="6" y="10" fill="rgba(239, 68, 68, 0.9)" font-size="8">Alerta Crítica 80%</text>
+                <path [attr.d]="generateAreaPath(visionService.fatigueHistory(), 0.00, 1.00)" [attr.fill]="visionService.fatigueScore() >= 0.8 ? 'rgba(239, 68, 68, 0.2)' : 'rgba(16, 185, 129, 0.15)'"/>
+                <path [attr.d]="generateSparklinePath(visionService.fatigueHistory(), 0.00, 1.00)" fill="none" [attr.stroke]="visionService.fatigueScore() >= 0.8 ? '#ef4444' : '#10b981'" stroke-width="2"/>
+              </svg>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Panel de Voice Companion & Guía de Intervención -->
+      <div class="analytics-card voice-card">
+        <div class="card-head-row">
+          <div class="voice-title-meta">
+            <span class="voice-icon">🎙️</span>
+            <div>
+              <h3 class="card-section-title">Voice Companion & Pausa Activa</h3>
+              <span class="card-tag-sub">Tutor acústico reactivo vía Web Speech API</span>
+            </div>
+          </div>
+
+          <div class="voice-tools">
+            <button type="button" class="btn-voice-action" (click)="playTestAudio()" title="Probar tono acústico de advertencia">
+              🔔 Tono
+            </button>
+            <button type="button" class="btn-voice-action" (click)="speakCurrentIntervention()" title="Narrar recomendación actual con síntesis de voz">
+              🔊 Narrar
+            </button>
+            <button type="button" class="btn-voice-action btn-zen-highlight" (click)="openZenModal()" title="Abrir ventana de respiración guiada de 3 minutos">
+              🌿 Pausa Zen
+            </button>
+          </div>
+        </div>
+
+        <div class="voice-content-body">
+          <div class="voice-quote-box">
+            <span class="quote-header-tag">RECOMENDACIÓN DEL MODELO</span>
+            <p class="quote-phrase">
+              "{{ visionService.lastIntervention()?.voiceScript || visionService.lastRecommendation() }}"
+            </p>
+          </div>
+
+          @if (visionService.lastIntervention(); as interv) {
+            <div class="interv-details">
+              <div class="interv-row">
+                <span class="interv-label">🧘 Ejercicio:</span>
+                <span class="interv-val">{{ interv.mindfulnessExercise }}</span>
+              </div>
+              <div class="interv-row">
+                <span class="interv-label">💡 Metáfora:</span>
+                <span class="interv-val">{{ interv.simplifiedAnalogy }}</span>
+              </div>
+            </div>
+          }
+        </div>
+
+        <!-- Bitácora Rápida de Eventos Recientes -->
+        <div class="events-log-dock">
+          <div class="log-dock-header">
+            <span class="log-title">Bitácora de Eventos Biométricos</span>
+            <button type="button" class="btn-reset-log" (click)="visionService.resetSession()" title="Reiniciar contadores">
+              🔄 Reiniciar
+            </button>
+          </div>
+          <div class="log-scroll-area">
+            @for (ev of visionService.recentEvents(); track $index) {
+              <div class="log-entry" [ngClass]="'log-' + ev.type">
+                <span class="log-time">{{ ev.time }}</span>
+                <span class="log-msg">{{ ev.message }}</span>
+              </div>
+            } @empty {
+              <div class="log-empty">Sensor en monitoreo activo. Parpadeos y bostezos se registrarán automáticamente.</div>
+            }
+          </div>
+        </div>
+
+      </div>
+
+    </div>
+
+  </div>
+
+  <!-- Modal Multimodal Zen de 3 Minutos con Respiración Diafragmática -->
+  @if (showZenModal() || (visionService.fatigueScore() >= 0.85 && visionService.lastIntervention() !== null)) {
+    <app-fatigue-modal 
+      [alert]="activeModalAlert()"
+      [intervention]="visionService.lastIntervention()"
+      (onDismiss)="closeZenModal()"
+      (onResume)="closeZenModal()">
+    </app-fatigue-modal>
+  }
+
+</div>
